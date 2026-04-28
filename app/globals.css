@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* SoulSync — beautiful pastel palette (emotion-adaptive overrides in theme provider) */
+:root {
+  --soul-bg: #fbf7e8;
+  --soul-bg-bottom: #f6f0cf;
+  --soul-card: #ffffff;
+  --soul-surface: #ffffff;
+  --soul-ai: #0f172a;
+  --soul-highlight: #fff3b0;
+  --soul-primary: #f4d34c;
+  --soul-accent: #fbbf24;
+  --soul-primary-text: #0f172a;
+  --soul-btn-text: #111827;
+  --soul-radius: 1rem;
+  --soul-transition: 300ms ease;
+}
+
+body {
+  background: linear-gradient(180deg, var(--soul-bg) 0%, var(--soul-bg-bottom) 100%);
+  min-height: 100vh;
+  color: var(--soul-primary-text);
+  transition: background 600ms ease, color 600ms ease;
+}
+
+/* Soft, calm, safe — rounded corners and gentle transitions */
+.soul-card {
+  background-color: var(--soul-card);
+  border-radius: var(--soul-radius);
+  box-shadow: 0 4px 12px rgba(45, 55, 72, 0.08), 0 2px 4px rgba(45, 55, 72, 0.04);
+  transition: background-color 600ms ease, box-shadow var(--soul-transition), transform 0.2s ease;
+}
+
+.soul-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(45, 55, 72, 0.12), 0 2px 6px rgba(45, 55, 72, 0.06);
+}
+
+.soul-surface {
+  background-color: var(--soul-surface);
+  border-radius: var(--soul-radius);
+  box-shadow: 0 2px 8px rgba(45, 55, 72, 0.06);
+  transition: background-color 600ms ease;
+}
+
+.soul-ai-bubble {
+  background-color: var(--soul-ai);
+  border-radius: var(--soul-radius);
+  transition: background-color 600ms ease;
+}
+
+.soul-btn-primary {
+  background-color: var(--soul-primary);
+  color: var(--soul-btn-text);
+  border-radius: var(--soul-radius);
+  transition: background-color var(--soul-transition), transform 0.15s ease;
+}
+
+.soul-btn-primary:hover {
+  filter: brightness(1.05);
+}
+
+.soul-btn-primary:active {
+  transform: scale(0.99);
+}
+
+.transition-gentle {
+  transition-duration: 300ms;
+  transition-timing-function: ease;
+}
+
+/* Rich text editor styles */
+.rich-editor {
+  min-height: 400px;
+  padding: 1.5rem;
+  border-radius: var(--soul-radius);
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 2px solid var(--soul-primary);
+  outline: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.6;
+  color: var(--soul-primary-text);
+}
+
+.rich-editor:focus {
+  border-color: var(--soul-accent);
+  box-shadow: 0 0 0 3px rgba(168, 200, 232, 0.2);
+}

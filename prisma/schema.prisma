@@ -1,0 +1,123 @@
+// SoulSync — Prisma schema
+// Optimized: user_id + created_at (or weekStart) indexes for all user-scoped queries.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  passwordHash   String?   // for email/password if used
+  accounts      Account[]
+  sessions      Session[]
+  diaryEntries  DiaryEntry[]
+  emotionAnalyses EmotionAnalysis[]
+  weeklySummaries WeeklySummary[]
+  wellnessAgentProfile WellnessAgentProfile?
+  wellnessConversations WellnessConversation[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+model DiaryEntry {
+  id               String   @id @default(cuid())
+  userId           String
+  content          String   @db.Text   // plain text for search / emotion
+  htmlContent      String?  @db.Text   // rich HTML as written
+  backgroundImage  String?  @db.Text   // data URL or URL for entry background
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emotionAnalyses  EmotionAnalysis[]
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model EmotionAnalysis {
+  id                String   @id @default(cuid())
+  diaryEntryId      String
+  userId            String   // denormalized for fast user-scoped queries
+  primaryEmotion    String
+  secondaryEmotion  String?
+  intensity         Float    // 0–1 or 1–5 scale
+  createdAt         DateTime @default(now())
+  diaryEntry        DiaryEntry @relation(fields: [diaryEntryId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model WeeklySummary {
+  id        String   @id @default(cuid())
+  userId    String
+  weekStart DateTime // start of week (e.g. Monday)
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekStart])
+  @@index([userId, weekStart(sort: Desc)])
+}
+
+model WellnessAgentProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String   @default("Wellness Guide")
+  voiceId   String   @default("default")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WellnessConversation {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  messages  Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, updatedAt(sort: Desc)])
+}
