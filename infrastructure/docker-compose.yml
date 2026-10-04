@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: soulsync-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: soulsync
+      POSTGRES_PASSWORD: soulsync_dev
+      POSTGRES_DB: soulsync
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soulsync -d soulsync"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
