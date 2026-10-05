@@ -24,7 +24,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Message is required." }, { status: 400 });
     }
 
-    const db = prisma as { wellnessAgentProfile?: { upsert: (args: unknown) => Promise<{ name: string; voiceId: string }> }; wellnessConversation?: { findUnique: (args: unknown) => Promise<unknown>; upsert: (args: unknown) => Promise<unknown> } };
+    const db = prisma as {
+      wellnessAgentProfile?: { upsert: (args: unknown) => Promise<{ name: string; voiceId: string }> };
+      wellnessConversation?: {
+        findUnique: (args: unknown) => Promise<{ messages?: StoredMessage[] } | null>;
+        upsert: (args: unknown) => Promise<unknown>;
+      };
+    };
     if (!db.wellnessAgentProfile || !db.wellnessConversation) {
       return NextResponse.json(
         {
@@ -155,8 +161,8 @@ ${weekly}
     const nowIso = new Date().toISOString();
     const updatedMessages: StoredMessage[] = [
       ...trimmedHistory,
-      { role: "user", content: message, createdAt: nowIso },
-      { role: "assistant", content: reply, createdAt: nowIso },
+      { role: "user" as const, content: message, createdAt: nowIso },
+      { role: "assistant" as const, content: reply, createdAt: nowIso },
     ].slice(-30);
 
     await db.wellnessConversation.upsert({
