@@ -4,3 +4,4 @@ export * from "./agent.schema";
 export * from "./auth.schema";
 export * from "./response.schema";
 export * from "./goals.schema";
+export * from "./conversation.schema";

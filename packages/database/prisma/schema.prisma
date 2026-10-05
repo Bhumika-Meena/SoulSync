@@ -17,6 +17,17 @@ enum GoalStatus {
   CANCELLED
 }
 
+enum ThreadStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum MessageRole {
+  user
+  assistant
+  tool
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String?   @unique
@@ -34,6 +45,7 @@ model User {
   wellnessAgentProfile WellnessAgentProfile?
   wellnessConversations WellnessConversation[]
   wellnessGoals WellnessGoal[]
+  conversationThreads ConversationThread[]
 }
 
 model Account {
@@ -127,6 +139,33 @@ model WellnessGoal {
 
   @@index([userId, status])
   @@index([userId, createdAt(sort: Desc)])
+}
+
+model ConversationThread {
+  id        String          @id @default(cuid())
+  userId    String
+  title     String?
+  status    ThreadStatus    @default(ACTIVE)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @default(now()) @updatedAt
+  deletedAt DateTime?
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ThreadMessage[]
+
+  @@index([userId, status])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model ThreadMessage {
+  id        String             @id @default(cuid())
+  threadId  String
+  role      MessageRole
+  content   String             @db.Text
+  metadata  Json?
+  createdAt DateTime           @default(now())
+  thread    ConversationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt(sort: Asc)])
 }
 
 model WellnessAgentProfile {
