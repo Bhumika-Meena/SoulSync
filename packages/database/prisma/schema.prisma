@@ -1,4 +1,4 @@
-// SoulSync — Prisma schema
+// SoulSync — Prisma schema (Canonical)
 // Optimized: user_id + created_at (or weekStart) indexes for all user-scoped queries.
 
 generator client {
