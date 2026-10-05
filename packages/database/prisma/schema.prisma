@@ -2,12 +2,14 @@
 // Optimized: user_id + created_at (or weekStart) indexes for all user-scoped queries.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
 }
 
 enum GoalStatus {
@@ -28,24 +30,31 @@ enum MessageRole {
   tool
 }
 
+enum MemorySourceType {
+  JOURNAL_ENTRY
+  GOAL
+  SUMMARY
+}
+
 model User {
-  id            String    @id @default(cuid())
-  email         String?   @unique
-  emailVerified DateTime?
-  name          String?
-  image         String?
-  passwordHash   String?   // for email/password if used
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @default(now()) @updatedAt
-  accounts      Account[]
-  sessions      Session[]
-  diaryEntries  DiaryEntry[]
-  emotionAnalyses EmotionAnalysis[]
-  weeklySummaries WeeklySummary[]
+  id                   String                 @id @default(cuid())
+  email                String?                @unique
+  emailVerified        DateTime?
+  name                 String?
+  image                String?
+  passwordHash         String?                // for email/password if used
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @default(now()) @updatedAt
+  accounts             Account[]
+  sessions             Session[]
+  diaryEntries         DiaryEntry[]
+  emotionAnalyses      EmotionAnalysis[]
+  weeklySummaries      WeeklySummary[]
   wellnessAgentProfile WellnessAgentProfile?
   wellnessConversations WellnessConversation[]
-  wellnessGoals WellnessGoal[]
-  conversationThreads ConversationThread[]
+  wellnessGoals        WellnessGoal[]
+  conversationThreads  ConversationThread[]
+  memoryEmbeddings     MemoryEmbedding[]
 }
 
 model Account {
@@ -166,6 +175,20 @@ model ThreadMessage {
   thread    ConversationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@index([threadId, createdAt(sort: Asc)])
+}
+
+model MemoryEmbedding {
+  id         String                         @id @default(cuid())
+  userId     String
+  sourceType MemorySourceType
+  sourceId   String
+  content    String                         @db.Text
+  embedding  Unsupported("vector(1536)")?
+  createdAt  DateTime                       @default(now())
+  user       User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, sourceType])
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model WellnessAgentProfile {
