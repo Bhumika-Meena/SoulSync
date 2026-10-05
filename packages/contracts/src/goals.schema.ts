@@ -18,6 +18,15 @@ export const CreateWellnessGoalSchema = z.object({
 
 export type CreateWellnessGoalDTO = z.infer<typeof CreateWellnessGoalSchema>;
 
+export const UpdateWellnessGoalSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional(),
+  targetDate: z.union([z.string().datetime(), z.date(), z.string()]).nullable().optional(),
+  status: GoalStatusSchema.optional(),
+});
+
+export type UpdateWellnessGoalDTO = z.infer<typeof UpdateWellnessGoalSchema>;
+
 export const WellnessGoalResponseSchema = z.object({
   id: z.string(),
   userId: z.string(),

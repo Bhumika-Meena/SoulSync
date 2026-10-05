@@ -6,6 +6,7 @@ import { HealthModule } from "./modules/health/health.module";
 import { JournalModule } from "./modules/journal/journal.module";
 import { EmotionsModule } from "./modules/emotions/emotions.module";
 import { UsersModule } from "./modules/users/users.module";
+import { GoalsModule } from "./modules/goals/goals.module";
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { UsersModule } from "./modules/users/users.module";
     JournalModule,
     EmotionsModule,
     UsersModule,
+    GoalsModule,
   ],
   controllers: [],
   providers: [],
