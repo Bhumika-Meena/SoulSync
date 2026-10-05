@@ -17,6 +17,8 @@ model User {
   name          String?
   image         String?
   passwordHash   String?   // for email/password if used
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
   accounts      Account[]
   sessions      Session[]
   diaryEntries  DiaryEntry[]
@@ -61,10 +63,15 @@ model VerificationToken {
 model DiaryEntry {
   id               String   @id @default(cuid())
   userId           String
-  content          String   @db.Text   // plain text for search / emotion
-  htmlContent      String?  @db.Text   // rich HTML as written
-  backgroundImage  String?  @db.Text   // data URL or URL for entry background
+  content          String   @db.Text   // plain text for search / emotion (legacy)
+  htmlContent      String?  @db.Text   // rich HTML as written (legacy)
+  backgroundImage  String?  @db.Text   // data URL or URL for entry background (legacy)
+  contentJson      Json?               // ProseMirror/TipTap document AST
+  plainText        String?  @db.Text   // extracted text for search and embeddings
+  assetUrl         String?             // attached media/audio URL
   createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+  deletedAt        DateTime?
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   emotionAnalyses  EmotionAnalysis[]
 
@@ -83,6 +90,7 @@ model EmotionAnalysis {
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, primaryEmotion, createdAt(sort: Desc)])
 }
 
 model WeeklySummary {
@@ -91,6 +99,7 @@ model WeeklySummary {
   weekStart DateTime // start of week (e.g. Monday)
   content   String   @db.Text
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, weekStart])
