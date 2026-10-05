@@ -7,13 +7,15 @@
     "build": "nest build",
     "start": "node dist/main.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "db:generate": "prisma generate --schema=../web/prisma/schema.prisma"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
+    "@prisma/client": "^6.1.0",
     "@soulsync/contracts": "workspace:*",
     "@soulsync/shared": "workspace:*",
     "reflect-metadata": "^0.2.2",
@@ -25,6 +27,7 @@
     "@nestjs/schematics": "^11.0.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.1",
+    "prisma": "^6.1.0",
     "typescript": "^5.7.2"
   }
 }
