@@ -1,0 +1,217 @@
+// SoulSync — Prisma schema (Canonical)
+// Optimized: user_id + created_at (or weekStart) indexes for all user-scoped queries.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+enum GoalStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum ThreadStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum MessageRole {
+  user
+  assistant
+  tool
+}
+
+enum MemorySourceType {
+  JOURNAL_ENTRY
+  GOAL
+  SUMMARY
+}
+
+model User {
+  id                   String                 @id @default(cuid())
+  email                String?                @unique
+  emailVerified        DateTime?
+  name                 String?
+  image                String?
+  passwordHash         String?                // for email/password if used
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @default(now()) @updatedAt
+  accounts             Account[]
+  sessions             Session[]
+  diaryEntries         DiaryEntry[]
+  emotionAnalyses      EmotionAnalysis[]
+  weeklySummaries      WeeklySummary[]
+  wellnessAgentProfile WellnessAgentProfile?
+  wellnessConversations WellnessConversation[]
+  wellnessGoals        WellnessGoal[]
+  conversationThreads  ConversationThread[]
+  memoryEmbeddings     MemoryEmbedding[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+model DiaryEntry {
+  id               String   @id @default(cuid())
+  userId           String
+  content          String   @db.Text   // plain text for search / emotion (legacy)
+  htmlContent      String?  @db.Text   // rich HTML as written (legacy)
+  backgroundImage  String?  @db.Text   // data URL or URL for entry background (legacy)
+  contentJson      Json?               // ProseMirror/TipTap document AST
+  plainText        String?  @db.Text   // extracted text for search and embeddings
+  assetUrl         String?             // attached media/audio URL
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+  deletedAt        DateTime?
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emotionAnalyses  EmotionAnalysis[]
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model EmotionAnalysis {
+  id                String   @id @default(cuid())
+  diaryEntryId      String
+  userId            String   // denormalized for fast user-scoped queries
+  primaryEmotion    String
+  secondaryEmotion  String?
+  intensity         Float    // 0–1 or 1–5 scale
+  createdAt         DateTime @default(now())
+  diaryEntry        DiaryEntry @relation(fields: [diaryEntryId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, primaryEmotion, createdAt(sort: Desc)])
+}
+
+model WeeklySummary {
+  id        String   @id @default(cuid())
+  userId    String
+  weekStart DateTime // start of week (e.g. Monday)
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekStart])
+  @@index([userId, weekStart(sort: Desc)])
+}
+
+model WellnessGoal {
+  id          String     @id @default(cuid())
+  userId      String
+  title       String
+  description String?    @db.Text
+  targetDate  DateTime?
+  status      GoalStatus @default(PENDING_APPROVAL)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @default(now()) @updatedAt
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model ConversationThread {
+  id        String          @id @default(cuid())
+  userId    String
+  title     String?
+  status    ThreadStatus    @default(ACTIVE)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @default(now()) @updatedAt
+  deletedAt DateTime?
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ThreadMessage[]
+
+  @@index([userId, status])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model ThreadMessage {
+  id        String             @id @default(cuid())
+  threadId  String
+  role      MessageRole
+  content   String             @db.Text
+  metadata  Json?
+  createdAt DateTime           @default(now())
+  thread    ConversationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt(sort: Asc)])
+}
+
+model MemoryEmbedding {
+  id         String                         @id @default(cuid())
+  userId     String
+  sourceType MemorySourceType
+  sourceId   String
+  content    String                         @db.Text
+  embedding  Unsupported("vector(1536)")?
+  createdAt  DateTime                       @default(now())
+  user       User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, sourceType])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model WellnessAgentProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String   @default("Wellness Guide")
+  voiceId   String   @default("default")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WellnessConversation {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  messages  Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, updatedAt(sort: Desc)])
+}

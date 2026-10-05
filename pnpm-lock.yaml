@@ -35,6 +35,9 @@ importers:
       '@soulsync/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@soulsync/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@soulsync/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -75,6 +78,9 @@ importers:
       '@prisma/client':
         specifier: ^6.1.0
         version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
+      '@soulsync/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
@@ -128,6 +134,19 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/database:
+    dependencies:
+      '@prisma/client':
+        specifier: ^6.1.0
+        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
+    devDependencies:
+      prisma:
+        specifier: ^6.1.0
+        version: 6.19.3(typescript@5.9.3)
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

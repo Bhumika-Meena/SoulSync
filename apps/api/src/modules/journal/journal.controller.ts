@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Param,
   Query,
   Body,
@@ -90,6 +91,21 @@ export class JournalController {
     return {
       success: true,
       data: entry,
+    };
+  }
+
+  @Delete(":id")
+  async deleteEntry(
+    @Param("id") id: string,
+    @Headers("x-user-id") headerUserId?: string,
+    @Query("userId") queryUserId?: string
+  ) {
+    const userId = this.extractUserId(headerUserId, queryUserId);
+    await this.journalService.deleteEntry(userId, id);
+
+    return {
+      success: true,
+      message: "Journal entry deleted successfully",
     };
   }
 }
