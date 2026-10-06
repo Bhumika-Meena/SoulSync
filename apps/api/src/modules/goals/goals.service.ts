@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { PrismaService } from "../../database/prisma.service";
+import { MemoryService } from "../memory/memory.service";
 import type {
   CreateWellnessGoalDTO,
   UpdateWellnessGoalDTO,
@@ -8,15 +9,21 @@ import type {
 
 @Injectable()
 export class GoalsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(GoalsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly memoryService: MemoryService
+  ) {}
 
   /**
    * Create a new wellness goal.
+   * Automatically ingests goal title and description into semantic memory.
    */
   async createGoal(userId: string, dto: CreateWellnessGoalDTO) {
     const targetDate = dto.targetDate ? new Date(dto.targetDate) : null;
 
-    return this.prisma.wellnessGoal.create({
+    const goal = await this.prisma.wellnessGoal.create({
       data: {
         userId,
         title: dto.title,
@@ -25,6 +32,26 @@ export class GoalsService {
         status: dto.status ?? "PENDING_APPROVAL",
       },
     });
+
+    // Automated Memory Ingestion:
+    // Prepare content from goal title and description and store embedding
+    const content = dto.description
+      ? `Goal: ${dto.title}. Description: ${dto.description}`
+      : `Goal: ${dto.title}`;
+
+    await this.memoryService
+      .store(userId, {
+        sourceType: "GOAL",
+        sourceId: goal.id,
+        content,
+      })
+      .catch((err) => {
+        this.logger.warn(
+          `Failed to auto-ingest memory embedding for goal ${goal.id}: ${err}`
+        );
+      });
+
+    return goal;
   }
 
   /**
@@ -60,6 +87,7 @@ export class GoalsService {
 
   /**
    * Update a wellness goal.
+   * Refreshes memory embedding if title or description was modified.
    */
   async updateGoal(userId: string, goalId: string, dto: UpdateWellnessGoalDTO) {
     await this.getGoalById(userId, goalId);
@@ -71,7 +99,7 @@ export class GoalsService {
           : null
         : undefined;
 
-    return this.prisma.wellnessGoal.update({
+    const updated = await this.prisma.wellnessGoal.update({
       where: { id: goalId },
       data: {
         ...(dto.title !== undefined ? { title: dto.title } : {}),
@@ -80,5 +108,25 @@ export class GoalsService {
         ...(targetDate !== undefined ? { targetDate } : {}),
       },
     });
+
+    if (dto.title !== undefined || dto.description !== undefined) {
+      const content = updated.description
+        ? `Goal: ${updated.title}. Description: ${updated.description}`
+        : `Goal: ${updated.title}`;
+
+      await this.memoryService
+        .store(userId, {
+          sourceType: "GOAL",
+          sourceId: goalId,
+          content,
+        })
+        .catch((err) => {
+          this.logger.warn(
+            `Failed to update memory embedding for goal ${goalId}: ${err}`
+          );
+        });
+    }
+
+    return updated;
   }
 }

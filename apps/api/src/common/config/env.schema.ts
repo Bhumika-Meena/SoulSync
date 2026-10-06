@@ -12,6 +12,7 @@ export const environmentSchema = z.object({
     .min(16, "JWT_SECRET must be at least 16 characters")
     .default("soulsync-development-jwt-secret-do-not-use-in-production"),
   JWT_EXPIRES_IN: z.string().default("7d"),
+  OPENAI_API_KEY: z.string().optional(),
 })
 .refine(
   (data) => {
