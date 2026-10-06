@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getRequiredSession } from "@/lib/auth/session";
-import { getDiaryEntryById } from "@/lib/db/queries";
+import { api, isApiClientError } from "@/lib/api";
 import { EntryContentView } from "./EntryContentView";
 
 export default async function EntryPage({
@@ -11,10 +11,24 @@ export default async function EntryPage({
 }) {
   const session = await getRequiredSession();
   const { id } = await params;
-  const entry = await getDiaryEntryById(session.user.id, id);
+
+  let entry: any;
+  try {
+    entry = await api.journal.get(id, { userId: session.user.id });
+  } catch (err) {
+    if (isApiClientError(err) && (err.statusCode === 404 || err.code === "ENTRY_NOT_FOUND")) {
+      notFound();
+    }
+    throw err;
+  }
+
   if (!entry) notFound();
 
-  const emotion = entry.emotionAnalyses[0];
+  const emotion = entry.emotionAnalyses?.[0];
+  const createdAtIso =
+    typeof entry.createdAt === "string"
+      ? entry.createdAt
+      : new Date(entry.createdAt).toISOString();
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -26,7 +40,7 @@ export default async function EntryPage({
       </Link>
       <article className="soul-card overflow-hidden rounded-2xl">
         <div className="flex items-center justify-between p-6 pb-0 text-sm text-soul-primary-text/60">
-          <time dateTime={entry.createdAt.toISOString()}>
+          <time dateTime={createdAtIso}>
             {new Date(entry.createdAt).toLocaleDateString(undefined, {
               dateStyle: "long",
             })}

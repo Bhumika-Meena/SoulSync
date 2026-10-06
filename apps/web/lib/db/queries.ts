@@ -2,7 +2,10 @@ import { prisma } from "@/lib/db";
 
 const EMOTIONS_FOR_LLM = 10;
 
-/** Get today's diary entry for a user (start of day in UTC). */
+/**
+ * @deprecated Superseded in Phase 3 by api.journal.getToday().
+ * Get today's diary entry for a user (start of day in UTC).
+ */
 export async function getTodaysEntry(userId: string) {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
@@ -38,7 +41,10 @@ export async function getLatestWeeklySummary(userId: string) {
   });
 }
 
-/** Create diary entry and return it. */
+/**
+ * @deprecated Superseded in Phase 3 by api.journal.create().
+ * Create diary entry and return it.
+ */
 export async function createDiaryEntry(
   userId: string,
   content: string,
@@ -71,7 +77,10 @@ export async function createEmotionAnalysis(
   });
 }
 
-/** List recent diary entries for user (indexed by userId + createdAt). */
+/**
+ * @deprecated Superseded in Phase 3 by api.journal.list().
+ * List recent diary entries for user (indexed by userId + createdAt).
+ */
 export async function listDiaryEntries(userId: string, limit = 50) {
   return prisma.diaryEntry.findMany({
     where: { userId },
@@ -83,7 +92,10 @@ export async function listDiaryEntries(userId: string, limit = 50) {
   });
 }
 
-/** Get single entry by id if it belongs to user. */
+/**
+ * @deprecated Superseded in Phase 3 by api.journal.get().
+ * Get single entry by id if it belongs to user.
+ */
 export async function getDiaryEntryById(userId: string, entryId: string) {
   return prisma.diaryEntry.findFirst({
     where: { id: entryId, userId },
@@ -92,6 +104,7 @@ export async function getDiaryEntryById(userId: string, entryId: string) {
 }
 
 /**
+ * @deprecated Superseded in Phase 3 by api.journal.list().
  * List diary entries since a given date (UTC-based timestamps).
  * Includes the latest emotion analysis per entry.
  * Used for insights charts/heatmaps.

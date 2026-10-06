@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRequiredSession } from "@/lib/auth/session";
-import { createDiaryEntry, createEmotionAnalysis } from "@/lib/db/queries";
+import { api } from "@/lib/api";
+import { createEmotionAnalysis } from "@/lib/db/queries";
 import { detectEmotionFromText } from "@/lib/llm/detect-emotion";
 import { z } from "zod";
 
@@ -25,10 +26,15 @@ export async function POST(req: Request) {
       );
     }
 
-    const entry = await createDiaryEntry(userId, parsed.data.content, {
-      htmlContent: parsed.data.htmlContent ?? null,
-      backgroundImage: parsed.data.backgroundImage ?? null,
-    });
+    const entry = await api.journal.create(
+      {
+        content: parsed.data.content,
+        htmlContent: parsed.data.htmlContent ?? null,
+        backgroundImage: parsed.data.backgroundImage ?? null,
+        plainText: parsed.data.content,
+      },
+      { userId }
+    );
     const emotion = await detectEmotionFromText(parsed.data.content);
     await createEmotionAnalysis(userId, entry.id, {
       primaryEmotion: emotion.primaryEmotion,
@@ -64,9 +70,11 @@ export async function POST(req: Request) {
 export async function GET() {
   try {
     const session = await getRequiredSession();
-    const { listDiaryEntries } = await import("@/lib/db/queries");
-    const entries = await listDiaryEntries(session.user.id);
-    return NextResponse.json({ entries });
+    const result = await api.journal.list(
+      { limit: 50 },
+      { userId: session.user.id }
+    );
+    return NextResponse.json({ entries: result.entries });
   } catch (e) {
     if (e instanceof Error && e.message === "Unauthorized") {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
