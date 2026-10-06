@@ -14,7 +14,10 @@ export default async function EntryPage({
 
   let entry: any;
   try {
-    entry = await api.journal.get(id, { userId: session.user.id });
+    entry = await api.journal.get(id, {
+      userId: session.user.id,
+      token: session.accessToken,
+    });
   } catch (err) {
     if (isApiClientError(err) && (err.statusCode === 404 || err.code === "ENTRY_NOT_FOUND")) {
       notFound();

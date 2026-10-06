@@ -9,6 +9,9 @@ import type {
   WellnessGoalResponseDTO,
   GoalStatus,
   UserProfileDTO,
+  RegisterUserDTO,
+  LoginUserDTO,
+  AuthResponseDTO,
 } from "@soulsync/contracts";
 
 export interface RequestContext {
@@ -342,4 +345,31 @@ export const api = {
       });
     },
   },
+
+  /**
+   * Auth API methods
+   */
+  auth: {
+    register: (data: RegisterUserDTO): Promise<AuthResponseDTO> => {
+      return apiRequest<AuthResponseDTO>("/auth/register", {
+        method: "POST",
+        body: data,
+      });
+    },
+
+    login: (data: LoginUserDTO): Promise<AuthResponseDTO> => {
+      return apiRequest<AuthResponseDTO>("/auth/login", {
+        method: "POST",
+        body: data,
+      });
+    },
+
+    getMe: (context?: RequestContext): Promise<UserProfileDTO> => {
+      return apiRequest<UserProfileDTO>("/auth/me", {
+        method: "GET",
+        context,
+      });
+    },
+  },
 };
+

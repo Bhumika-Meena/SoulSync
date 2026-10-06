@@ -6,11 +6,13 @@ import {
   Param,
   Query,
   Body,
-  Headers,
-  BadRequestException,
 } from "@nestjs/common";
 import { JournalService } from "./journal.service";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import {
+  CurrentUser,
+  type AuthenticatedUser,
+} from "../../common/decorators/current-user.decorator";
 import {
   CreateJournalEntrySchema,
   JournalQuerySchema,
@@ -22,25 +24,12 @@ import {
 export class JournalController {
   constructor(private readonly journalService: JournalService) {}
 
-  private extractUserId(headerUserId?: string, queryUserId?: string): string {
-    const userId = headerUserId || queryUserId;
-    if (!userId) {
-      throw new BadRequestException({
-        code: "USER_ID_REQUIRED",
-        message: "User context is required via x-user-id header or userId query parameter",
-      });
-    }
-    return userId;
-  }
-
   @Get()
   async listEntries(
-    @Headers("x-user-id") headerUserId?: string,
-    @Query("userId") queryUserId?: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Query(new ZodValidationPipe(JournalQuerySchema)) query?: JournalQueryDTO
   ) {
-    const userId = this.extractUserId(headerUserId, queryUserId);
-    const result = await this.journalService.listEntries(userId, query);
+    const result = await this.journalService.listEntries(user.id, query);
 
     return {
       success: true,
@@ -50,12 +39,8 @@ export class JournalController {
   }
 
   @Get("today")
-  async getTodaysEntry(
-    @Headers("x-user-id") headerUserId?: string,
-    @Query("userId") queryUserId?: string
-  ) {
-    const userId = this.extractUserId(headerUserId, queryUserId);
-    const entry = await this.journalService.getTodaysEntry(userId);
+  async getTodaysEntry(@CurrentUser() user: AuthenticatedUser) {
+    const entry = await this.journalService.getTodaysEntry(user.id);
 
     return {
       success: true,
@@ -66,11 +51,9 @@ export class JournalController {
   @Get(":id")
   async getEntryById(
     @Param("id") id: string,
-    @Headers("x-user-id") headerUserId?: string,
-    @Query("userId") queryUserId?: string
+    @CurrentUser() user: AuthenticatedUser
   ) {
-    const userId = this.extractUserId(headerUserId, queryUserId);
-    const entry = await this.journalService.getEntryById(userId, id);
+    const entry = await this.journalService.getEntryById(user.id, id);
 
     return {
       success: true,
@@ -80,13 +63,11 @@ export class JournalController {
 
   @Post()
   async createEntry(
-    @Headers("x-user-id") headerUserId?: string,
-    @Query("userId") queryUserId?: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(CreateJournalEntrySchema))
     body?: CreateJournalEntryDTO
   ) {
-    const userId = this.extractUserId(headerUserId, queryUserId);
-    const entry = await this.journalService.createEntry(userId, body!);
+    const entry = await this.journalService.createEntry(user.id, body!);
 
     return {
       success: true,
@@ -97,11 +78,9 @@ export class JournalController {
   @Delete(":id")
   async deleteEntry(
     @Param("id") id: string,
-    @Headers("x-user-id") headerUserId?: string,
-    @Query("userId") queryUserId?: string
+    @CurrentUser() user: AuthenticatedUser
   ) {
-    const userId = this.extractUserId(headerUserId, queryUserId);
-    await this.journalService.deleteEntry(userId, id);
+    await this.journalService.deleteEntry(user.id, id);
 
     return {
       success: true,

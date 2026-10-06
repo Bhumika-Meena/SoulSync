@@ -20,7 +20,7 @@ export default async function InsightsPage() {
   while (entries.length < maxEntries) {
     const result = await api.journal.list(
       { startDate, page, limit: 50 },
-      { userId }
+      { userId, token: session.accessToken }
     );
     entries.push(...result.entries);
 

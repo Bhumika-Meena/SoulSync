@@ -27,3 +27,18 @@ export const UserProfileSchema = z.object({
 });
 
 export type UserProfileDTO = z.infer<typeof UserProfileSchema>;
+
+export const AuthResponseSchema = z.object({
+  accessToken: z.string(),
+  user: UserProfileSchema,
+});
+
+export type AuthResponseDTO = z.infer<typeof AuthResponseSchema>;
+
+export const JwtPayloadSchema = z.object({
+  sub: z.string(),
+  email: z.string().email().optional(),
+});
+
+export type JwtPayloadDTO = z.infer<typeof JwtPayloadSchema>;
+

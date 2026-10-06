@@ -6,11 +6,13 @@ import {
   Param,
   Query,
   Body,
-  Headers,
-  BadRequestException,
 } from "@nestjs/common";
 import { GoalsService } from "./goals.service";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import {
+  CurrentUser,
+  type AuthenticatedUser,
+} from "../../common/decorators/current-user.decorator";
 import {
   CreateWellnessGoalSchema,
   UpdateWellnessGoalSchema,
@@ -23,26 +25,13 @@ import {
 export class GoalsController {
   constructor(private readonly goalsService: GoalsService) {}
 
-  private extractUserId(headerUserId?: string, queryUserId?: string): string {
-    const userId = headerUserId || queryUserId;
-    if (!userId) {
-      throw new BadRequestException({
-        code: "USER_ID_REQUIRED",
-        message: "User context is required via x-user-id header or userId query parameter",
-      });
-    }
-    return userId;
-  }
-
   @Post()
   async createGoal(
-    @Headers("x-user-id") headerUserId?: string,
-    @Query("userId") queryUserId?: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(CreateWellnessGoalSchema))
     body?: CreateWellnessGoalDTO
   ) {
-    const userId = this.extractUserId(headerUserId, queryUserId);
-    const goal = await this.goalsService.createGoal(userId, body!);
+    const goal = await this.goalsService.createGoal(user.id, body!);
 
     return {
       success: true,
@@ -52,12 +41,10 @@ export class GoalsController {
 
   @Get()
   async listGoals(
-    @Headers("x-user-id") headerUserId?: string,
-    @Query("userId") queryUserId?: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Query("status") status?: GoalStatus
   ) {
-    const userId = this.extractUserId(headerUserId, queryUserId);
-    const goals = await this.goalsService.listGoals(userId, status);
+    const goals = await this.goalsService.listGoals(user.id, status);
 
     return {
       success: true,
@@ -68,11 +55,9 @@ export class GoalsController {
   @Get(":id")
   async getGoalById(
     @Param("id") id: string,
-    @Headers("x-user-id") headerUserId?: string,
-    @Query("userId") queryUserId?: string
+    @CurrentUser() user: AuthenticatedUser
   ) {
-    const userId = this.extractUserId(headerUserId, queryUserId);
-    const goal = await this.goalsService.getGoalById(userId, id);
+    const goal = await this.goalsService.getGoalById(user.id, id);
 
     return {
       success: true,
@@ -83,13 +68,11 @@ export class GoalsController {
   @Patch(":id")
   async updateGoal(
     @Param("id") id: string,
-    @Headers("x-user-id") headerUserId?: string,
-    @Query("userId") queryUserId?: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(UpdateWellnessGoalSchema))
     body?: UpdateWellnessGoalDTO
   ) {
-    const userId = this.extractUserId(headerUserId, queryUserId);
-    const updated = await this.goalsService.updateGoal(userId, id, body!);
+    const updated = await this.goalsService.updateGoal(user.id, id, body!);
 
     return {
       success: true,
