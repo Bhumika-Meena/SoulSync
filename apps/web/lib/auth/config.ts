@@ -4,7 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db";
 import type { Adapter } from "next-auth/adapters";
-import { compare } from "bcryptjs";
+import { api } from "@/lib/api";
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as Adapter,
@@ -26,18 +26,26 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        });
-        if (!user?.passwordHash) return null;
-        const ok = await compare(credentials.password, user.passwordHash);
-        if (!ok) return null;
-        return {
-          id: user.id,
-          email: user.email ?? undefined,
-          name: user.name ?? undefined,
-          image: user.image ?? undefined,
-        };
+        try {
+          const authResponse = await api.auth.login({
+            email: credentials.email,
+            password: credentials.password,
+          });
+
+          if (!authResponse?.accessToken || !authResponse?.user) {
+            return null;
+          }
+
+          return {
+            id: authResponse.user.id,
+            email: authResponse.user.email ?? undefined,
+            name: authResponse.user.name ?? undefined,
+            image: authResponse.user.image ?? undefined,
+            accessToken: authResponse.accessToken,
+          };
+        } catch {
+          return null;
+        }
       },
     }),
   ],
@@ -46,6 +54,9 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.email = user.email ?? undefined;
+        if (user.accessToken) {
+          token.accessToken = user.accessToken;
+        }
       }
       return token;
     },
@@ -53,6 +64,9 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.email = token.email ?? null;
+      }
+      if (token.accessToken) {
+        session.accessToken = token.accessToken;
       }
       return session;
     },

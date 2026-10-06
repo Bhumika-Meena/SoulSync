@@ -6,7 +6,7 @@ export default async function RecentEntriesPage() {
   const session = await getRequiredSession();
   const { entries } = await api.journal.list(
     { limit: 80 },
-    { userId: session.user.id }
+    { userId: session.user.id, token: session.accessToken }
   );
 
   return (

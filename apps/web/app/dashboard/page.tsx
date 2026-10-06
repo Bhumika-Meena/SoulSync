@@ -140,7 +140,7 @@ export default async function DashboardPage() {
   const userId = session.user.id;
   const db = prisma as any;
   const [journalData, profile] = await Promise.all([
-    api.journal.list({ limit: 10 }, { userId }),
+    api.journal.list({ limit: 10 }, { userId, token: session.accessToken }),
     db.wellnessAgentProfile?.findUnique?.({ where: { userId } }),
   ]);
   const entries = journalData.entries as any[];

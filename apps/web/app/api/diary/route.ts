@@ -33,7 +33,7 @@ export async function POST(req: Request) {
         backgroundImage: parsed.data.backgroundImage ?? null,
         plainText: parsed.data.content,
       },
-      { userId }
+      { userId, token: session.accessToken }
     );
     const emotion = await detectEmotionFromText(parsed.data.content);
     await createEmotionAnalysis(userId, entry.id, {
@@ -72,7 +72,7 @@ export async function GET() {
     const session = await getRequiredSession();
     const result = await api.journal.list(
       { limit: 50 },
-      { userId: session.user.id }
+      { userId: session.user.id, token: session.accessToken }
     );
     return NextResponse.json({ entries: result.entries });
   } catch (e) {
