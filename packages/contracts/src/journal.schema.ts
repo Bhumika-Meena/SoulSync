@@ -31,6 +31,17 @@ export const JournalEntryResponseSchema = z.object({
   plainText: z.string().optional(),
   assetUrl: z.string().nullable().optional(),
   createdAt: z.union([z.string().datetime(), z.date(), z.string()]),
+  emotionAnalyses: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        primaryEmotion: z.string(),
+        secondaryEmotion: z.string().nullable().optional(),
+        intensity: z.number(),
+        createdAt: z.union([z.string().datetime(), z.date(), z.string()]).optional(),
+      })
+    )
+    .optional(),
 });
 
 export type JournalEntryResponseDTO = z.infer<typeof JournalEntryResponseSchema>;
@@ -42,6 +53,7 @@ export const JournalQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(10),
   search: z.string().max(200).optional(),
+  startDate: z.string().datetime().optional(),
 });
 
 export type JournalQueryDTO = z.infer<typeof JournalQuerySchema>;

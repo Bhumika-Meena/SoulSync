@@ -22,6 +22,13 @@ export class JournalService {
     const where: Prisma.DiaryEntryWhereInput = {
       userId,
       deletedAt: null,
+      ...(query?.startDate
+        ? {
+            createdAt: {
+              gte: new Date(query.startDate),
+            },
+          }
+        : {}),
       ...(query?.search
         ? {
             OR: [

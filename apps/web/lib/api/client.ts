@@ -184,6 +184,7 @@ export const api = {
       if (query?.page) params.append("page", String(query.page));
       if (query?.limit) params.append("limit", String(query.limit));
       if (query?.search) params.append("search", query.search);
+      if (query?.startDate) params.append("startDate", query.startDate);
 
       const queryString = params.toString();
       const url = `${baseUrl}/journal${queryString ? `?${queryString}` : ""}`;
