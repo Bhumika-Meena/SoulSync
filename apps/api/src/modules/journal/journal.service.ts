@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { PrismaService } from "../../database/prisma.service";
+import { MemoryService } from "../memory/memory.service";
 import type { Prisma } from "@prisma/client";
 import type {
   CreateJournalEntryDTO,
@@ -8,7 +9,12 @@ import type {
 
 @Injectable()
 export class JournalService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(JournalService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly memoryService: MemoryService
+  ) {}
 
   /**
    * List paginated active journal entries for a user, ordered by creation date descending.
@@ -105,13 +111,14 @@ export class JournalService {
 
   /**
    * Create a new journal entry supporting both legacy and Phase 2 fields.
+   * Automatically ingests plain reflection text into semantic memory.
    */
   async createEntry(userId: string, dto: CreateJournalEntryDTO) {
     const contentJson = dto.contentJson
       ? (dto.contentJson as Prisma.InputJsonValue)
       : undefined;
 
-    return this.prisma.diaryEntry.create({
+    const entry = await this.prisma.diaryEntry.create({
       data: {
         userId,
         content: dto.content,
@@ -125,6 +132,25 @@ export class JournalService {
         emotionAnalyses: true,
       },
     });
+
+    // Automated Memory Ingestion:
+    // Extract plain reflection text and generate/persist pgvector memory embedding
+    const reflectionText = dto.plainText ?? dto.content;
+    if (reflectionText && reflectionText.trim().length > 0) {
+      await this.memoryService
+        .store(userId, {
+          sourceType: "JOURNAL_ENTRY",
+          sourceId: entry.id,
+          content: reflectionText.trim(),
+        })
+        .catch((err) => {
+          this.logger.warn(
+            `Failed to auto-ingest memory embedding for journal ${entry.id}: ${err}`
+          );
+        });
+    }
+
+    return entry;
   }
 
   /**
@@ -154,6 +180,7 @@ export class JournalService {
 
   /**
    * Soft-delete a journal entry by ID.
+   * Automatically purges associated memory embeddings.
    */
   async deleteEntry(userId: string, entryId: string) {
     const entry = await this.prisma.diaryEntry.findFirst({
@@ -166,6 +193,15 @@ export class JournalService {
         message: `Journal entry with ID ${entryId} not found`,
       });
     }
+
+    // Purge memory embedding for deleted entry
+    await this.memoryService
+      .deleteBySource(userId, entryId)
+      .catch((err) => {
+        this.logger.warn(
+          `Failed to purge memory embedding for deleted journal ${entryId}: ${err}`
+        );
+      });
 
     return this.prisma.diaryEntry.update({
       where: { id: entryId },
