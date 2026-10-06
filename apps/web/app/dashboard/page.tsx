@@ -1,13 +1,11 @@
 import Link from "next/link";
 import { getRequiredSession } from "@/lib/auth/session";
-import { listDiaryEntries } from "@/lib/db/queries";
+import { api } from "@/lib/api";
 import { DashboardSceneImage } from "@/components/dashboard/DashboardSceneImage";
 import { ThemeSync } from "@/components/theme/ThemeSync";
 import { WellnessGuideCard } from "@/components/dashboard/WellnessGuideCard";
 import { prisma } from "@/lib/db";
 import type { EmotionSlug } from "@/lib/theme/tokens";
-
-type EntryWithEmotions = Awaited<ReturnType<typeof listDiaryEntries>>[number];
 
 function emotionLabelToSlug(label?: string): EmotionSlug {
   const l = (label ?? "").toLowerCase();
@@ -141,10 +139,11 @@ export default async function DashboardPage() {
   const session = await getRequiredSession();
   const userId = session.user.id;
   const db = prisma as any;
-  const [entries, profile] = await Promise.all([
-    listDiaryEntries(userId, 10),
+  const [journalData, profile] = await Promise.all([
+    api.journal.list({ limit: 10 }, { userId }),
     db.wellnessAgentProfile?.findUnique?.({ where: { userId } }),
   ]);
+  const entries = journalData.entries as any[];
 
   const latestEmotion = entries[0]?.emotionAnalyses[0];
   const themeEmotion = emotionLabelToSlug(latestEmotion?.primaryEmotion);
@@ -241,8 +240,8 @@ export default async function DashboardPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {entries.slice(0, 2).map((entry: EntryWithEmotions) => {
-                const emotion = entry.emotionAnalyses[0];
+              {entries.slice(0, 2).map((entry: any) => {
+                const emotion = entry.emotionAnalyses?.[0];
                 const primary = emotion?.primaryEmotion?.toLowerCase() ?? "";
                 const icon = primary.includes("happy")
                   ? "☀"

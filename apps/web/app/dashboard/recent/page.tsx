@@ -1,16 +1,17 @@
 import { getRequiredSession } from "@/lib/auth/session";
-import { listDiaryEntries } from "@/lib/db/queries";
+import { api } from "@/lib/api";
 import { RecentEntriesBook } from "@/components/dashboard/RecentEntriesBook";
-
-type EntryWithEmotions = Awaited<ReturnType<typeof listDiaryEntries>>[number];
 
 export default async function RecentEntriesPage() {
   const session = await getRequiredSession();
-  const entries: EntryWithEmotions[] = await listDiaryEntries(session.user.id, 80);
+  const { entries } = await api.journal.list(
+    { limit: 80 },
+    { userId: session.user.id }
+  );
 
   return (
     <div className="max-w-4xl mx-auto">
-      <RecentEntriesBook entries={entries} />
+      <RecentEntriesBook entries={entries as any} />
     </div>
   );
 }

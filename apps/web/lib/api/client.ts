@@ -176,7 +176,7 @@ export const api = {
    */
   journal: {
     list: async (
-      query?: JournalQueryDTO,
+      query?: Partial<JournalQueryDTO>,
       context?: RequestContext
     ): Promise<PaginatedJournalResult> => {
       const baseUrl = getApiBaseUrl();
