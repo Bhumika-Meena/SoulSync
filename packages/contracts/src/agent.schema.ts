@@ -11,6 +11,7 @@ export const AgentApprovalRequestSchema = z.object({
   actionId: z.string(),
   approved: z.boolean(),
   modifiedPayload: z.record(z.unknown()).optional(),
+  threadId: z.string().optional(),
 });
 
 export type AgentApprovalRequestDTO = z.infer<typeof AgentApprovalRequestSchema>;
