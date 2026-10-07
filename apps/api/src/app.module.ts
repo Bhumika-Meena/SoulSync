@@ -10,6 +10,8 @@ import { UsersModule } from "./modules/users/users.module";
 import { GoalsModule } from "./modules/goals/goals.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { MemoryModule } from "./modules/memory/memory.module";
+import { InternalModule } from "./modules/internal/internal.module";
+import { AgentModule } from "./modules/agent/agent.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 
 @Module({
@@ -27,6 +29,8 @@ import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
     UsersModule,
     GoalsModule,
     MemoryModule,
+    InternalModule,
+    AgentModule,
   ],
   controllers: [],
   providers: [
