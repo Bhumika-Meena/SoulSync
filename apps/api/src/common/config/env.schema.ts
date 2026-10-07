@@ -13,6 +13,11 @@ export const environmentSchema = z.object({
     .default("soulsync-development-jwt-secret-do-not-use-in-production"),
   JWT_EXPIRES_IN: z.string().default("7d"),
   OPENAI_API_KEY: z.string().optional(),
+  INTERNAL_AGENT_SECRET: z
+    .string()
+    .min(16, "INTERNAL_AGENT_SECRET must be at least 16 characters")
+    .default("soulsync-internal-agent-secret-do-not-use-in-production"),
+  AGENT_SERVICE_URL: z.string().url().default("http://127.0.0.1:8000"),
 })
 .refine(
   (data) => {

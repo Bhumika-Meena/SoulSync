@@ -26,3 +26,31 @@ export const AgentStreamEventTypeSchema = z.enum([
 ]);
 
 export type AgentStreamEventType = z.infer<typeof AgentStreamEventTypeSchema>;
+
+export const InternalToolNameSchema = z.enum([
+  "get_recent_journal_entries",
+  "get_emotion_trends",
+  "search_memory",
+  "create_wellness_goal",
+]);
+export type InternalToolName = z.infer<typeof InternalToolNameSchema>;
+
+export const InternalToolExecutionRequestSchema = z.object({
+  tool: InternalToolNameSchema,
+  userId: z.string().min(1, "userId is required"),
+  payload: z.record(z.unknown()).default({}),
+});
+export type InternalToolExecutionRequestDTO = z.infer<typeof InternalToolExecutionRequestSchema>;
+
+export const InternalToolExecutionResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.unknown().optional(),
+  error: z.string().optional(),
+});
+export type InternalToolExecutionResponseDTO = z.infer<typeof InternalToolExecutionResponseSchema>;
+
+export const AgentEventPayloadSchema = z.object({
+  type: AgentStreamEventTypeSchema,
+  data: z.union([z.record(z.unknown()), z.string()]),
+});
+export type AgentEventPayloadDTO = z.infer<typeof AgentEventPayloadSchema>;
