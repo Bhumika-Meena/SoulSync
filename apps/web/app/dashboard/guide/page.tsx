@@ -1,25 +1,24 @@
 import { getRequiredSession } from "@/lib/auth/session";
-import { prisma } from "@/lib/db";
-import { GuideChat } from "@/components/dashboard/GuideChat";
+import { AgentChatContainer } from "@/components/agent/AgentChatContainer";
+import { api } from "@/lib/api";
+
+import type { ConversationThreadResponseDTO } from "@soulsync/contracts";
 
 export default async function GuidePage() {
   const session = await getRequiredSession();
   const userId = session.user.id;
+  const token = session.accessToken;
 
-  const [profile, conversation] = await Promise.all([
-    prisma.wellnessAgentProfile.upsert({
-      where: { userId },
-      update: {},
-      create: { userId },
-    }),
-    prisma.wellnessConversation.findUnique({ where: { userId } }),
-  ]);
+  let initialThreads: ConversationThreadResponseDTO[] = [];
+  try {
+    initialThreads = await api.agent.listThreads({ userId, token });
+  } catch {
+    initialThreads = [];
+  }
 
   return (
-    <GuideChat
-      initialProfile={{ name: profile.name, voiceId: profile.voiceId }}
-      initialMessages={(conversation?.messages as any[]) ?? []}
-    />
+    <main className="max-w-6xl mx-auto px-2 sm:px-4 py-3 sm:py-6">
+      <AgentChatContainer initialThreads={initialThreads} />
+    </main>
   );
 }
-
