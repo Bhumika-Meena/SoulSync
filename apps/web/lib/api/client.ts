@@ -12,7 +12,16 @@ import type {
   RegisterUserDTO,
   LoginUserDTO,
   AuthResponseDTO,
+  AgentChatRequestDTO,
+  AgentApprovalRequestDTO,
+  ConversationThreadResponseDTO,
+  ThreadMessageResponseDTO,
 } from "@soulsync/contracts";
+import {
+  type AgentStreamCallbacks,
+  type AgentStreamEvent,
+  processReadableStream,
+} from "./sse";
 
 export interface RequestContext {
   userId?: string;
@@ -369,6 +378,148 @@ export const api = {
         method: "GET",
         context,
       });
+    },
+  },
+
+  /**
+   * Agent API methods
+   */
+  agent: {
+    listThreads: (context?: RequestContext): Promise<ConversationThreadResponseDTO[]> => {
+      return apiRequest<ConversationThreadResponseDTO[]>("/agent/threads", {
+        method: "GET",
+        context,
+      });
+    },
+
+    listMessages: (
+      threadId: string,
+      context?: RequestContext
+    ): Promise<ThreadMessageResponseDTO[]> => {
+      return apiRequest<ThreadMessageResponseDTO[]>(`/agent/threads/${threadId}/messages`, {
+        method: "GET",
+        context,
+      });
+    },
+
+    chatStream: async (
+      data: AgentChatRequestDTO,
+      callbacks: AgentStreamCallbacks,
+      context?: RequestContext
+    ): Promise<void> => {
+      const baseUrl = getApiBaseUrl();
+      const url = `${baseUrl}/agent/chat`;
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        ...(context?.headers ?? {}),
+      };
+
+      if (context?.userId) {
+        headers["x-user-id"] = context.userId;
+      }
+      if (context?.token) {
+        headers["Authorization"] = `Bearer ${context.token}`;
+      }
+
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(data),
+          signal: context?.signal,
+        });
+      } catch (networkError: unknown) {
+        const message =
+          networkError instanceof Error ? networkError.message : "Failed to connect to agent API";
+        const clientError = new ApiClientError(0, message, "NETWORK_ERROR");
+        callbacks.onError?.(clientError);
+        throw clientError;
+      }
+
+      if (!res.ok) {
+        let errorData: any = {};
+        try {
+          errorData = await res.json();
+        } catch {
+          errorData = { message: `Request failed with status ${res.status}` };
+        }
+        const message = errorData?.error?.message || errorData?.message || `HTTP ${res.status}`;
+        const code = errorData?.error?.code || (res.status === 401 ? "UNAUTHORIZED" : "API_ERROR");
+        const clientError = new ApiClientError(res.status, message, code, errorData?.error?.details);
+        callbacks.onError?.(clientError);
+        throw clientError;
+      }
+
+      if (!res.body) {
+        const noBodyError = new ApiClientError(0, "No response body received from stream", "STREAM_ERROR");
+        callbacks.onError?.(noBodyError);
+        throw noBodyError;
+      }
+
+      await processReadableStream(res.body, callbacks, context?.signal);
+    },
+
+    approveStream: async (
+      data: AgentApprovalRequestDTO,
+      callbacks: AgentStreamCallbacks,
+      context?: RequestContext
+    ): Promise<void> => {
+      const baseUrl = getApiBaseUrl();
+      const url = `${baseUrl}/agent/approve`;
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        ...(context?.headers ?? {}),
+      };
+
+      if (context?.userId) {
+        headers["x-user-id"] = context.userId;
+      }
+      if (context?.token) {
+        headers["Authorization"] = `Bearer ${context.token}`;
+      }
+
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(data),
+          signal: context?.signal,
+        });
+      } catch (networkError: unknown) {
+        const message =
+          networkError instanceof Error ? networkError.message : "Failed to connect to agent API";
+        const clientError = new ApiClientError(0, message, "NETWORK_ERROR");
+        callbacks.onError?.(clientError);
+        throw clientError;
+      }
+
+      if (!res.ok) {
+        let errorData: any = {};
+        try {
+          errorData = await res.json();
+        } catch {
+          errorData = { message: `Request failed with status ${res.status}` };
+        }
+        const message = errorData?.error?.message || errorData?.message || `HTTP ${res.status}`;
+        const code = errorData?.error?.code || (res.status === 401 ? "UNAUTHORIZED" : "API_ERROR");
+        const clientError = new ApiClientError(res.status, message, code, errorData?.error?.details);
+        callbacks.onError?.(clientError);
+        throw clientError;
+      }
+
+      if (!res.body) {
+        const noBodyError = new ApiClientError(0, "No response body received from stream", "STREAM_ERROR");
+        callbacks.onError?.(noBodyError);
+        throw noBodyError;
+      }
+
+      await processReadableStream(res.body, callbacks, context?.signal);
     },
   },
 };
