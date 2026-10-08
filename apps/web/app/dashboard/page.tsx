@@ -4,7 +4,6 @@ import { api } from "@/lib/api";
 import { DashboardSceneImage } from "@/components/dashboard/DashboardSceneImage";
 import { ThemeSync } from "@/components/theme/ThemeSync";
 import { WellnessGuideCard } from "@/components/dashboard/WellnessGuideCard";
-import { prisma } from "@/lib/db";
 import type { EmotionSlug } from "@/lib/theme/tokens";
 
 function emotionLabelToSlug(label?: string): EmotionSlug {
@@ -138,11 +137,10 @@ const MOOD_PLAYLISTS: Record<EmotionSlug, PlaylistConfig> = {
 export default async function DashboardPage() {
   const session = await getRequiredSession();
   const userId = session.user.id;
-  const db = prisma as any;
-  const [journalData, profile] = await Promise.all([
-    api.journal.list({ limit: 10 }, { userId, token: session.accessToken }),
-    db.wellnessAgentProfile?.findUnique?.({ where: { userId } }),
-  ]);
+  const journalData = await api.journal.list(
+    { limit: 10 },
+    { userId, token: session.accessToken }
+  );
   const entries = journalData.entries as any[];
 
   const latestEmotion = entries[0]?.emotionAnalyses[0];
@@ -293,10 +291,7 @@ export default async function DashboardPage() {
         </div>
 
         <div className="lg:col-span-1 space-y-6">
-          <WellnessGuideCard
-            initialName={profile?.name ?? "Wellness Guide"}
-            initialVoiceId={profile?.voiceId ?? null}
-          />
+          <WellnessGuideCard />
 
           <div id="music" className="rounded-2xl bg-white border border-slate-200/70 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-slate-200/70 flex items-center justify-between gap-3">
