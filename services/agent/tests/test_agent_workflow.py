@@ -1,7 +1,9 @@
 import pytest
+from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from app.graph.state import AgentState
 from app.graph.workflow import create_agent_workflow
 from app.tools.client import ToolClient
+from app.core.config import settings
 
 class MockToolClient:
     def __init__(self):
@@ -129,3 +131,82 @@ async def test_approval_resumption_executes_goal():
     assert result["action_result"] is not None
     assert result["action_result"]["status"] == "ACTIVE"
     assert ("create_wellness_goal", "user_test_2", "Morning Breathwork Practice", True) in mock_client.calls
+
+@pytest.mark.asyncio
+async def test_rejection_cancels_action_and_blocks_mutation():
+    """Verify approved=False cancels action, blocks tool execution, and returns empathetic refusal."""
+    mock_client = MockToolClient()
+    workflow = create_agent_workflow(mock_client)
+
+    rejected_state = AgentState(
+        user_id="user_test_3",
+        thread_id="thread_test_3",
+        message="User declined goal action",
+        intent="goal_planning",
+        approved=False,
+        rejected=True,
+        pending_action={
+            "actionId": "act_test_reject",
+            "tool": "create_wellness_goal",
+            "title": "Daily Evening Walk",
+        },
+    )
+
+    result = await workflow.ainvoke(rejected_state)
+    events = result["events"]
+    event_types = [e["type"] for e in events]
+
+    # Crucial assertion: approval.required must NOT be re-emitted
+    assert "approval.required" not in event_types
+    # Crucial assertion: create_wellness_goal tool must NOT be executed
+    assert not any(call[0] == "create_wellness_goal" for call in mock_client.calls)
+    # Action result must be CANCELLED
+    assert result.get("action_result", {}).get("status") == "CANCELLED"
+    # Final response must empathetically acknowledge cancellation
+    assert "cancelled setting this goal" in result["final_response"].lower()
+
+@pytest.mark.asyncio
+async def test_custom_llm_model_reasoning_integration():
+    """Verify model reasoning integration using mock chat model."""
+    mock_client = MockToolClient()
+    fake_llm = FakeListChatModel(
+        responses=["I hear how much thoughtfulness you bring to your daily emotional reflections."]
+    )
+    workflow = create_agent_workflow(mock_client, llm=fake_llm)
+
+    state = AgentState(
+        user_id="user_test_4",
+        thread_id="thread_test_4",
+        message="I'm feeling calm and reflective today about the sunset.",
+    )
+
+    result = await workflow.ainvoke(state)
+    assert "I hear how much thoughtfulness you bring" in result["final_response"]
+
+@pytest.mark.asyncio
+async def test_production_provider_outage_produces_controlled_error():
+    """Verify provider failures in production produce controlled error events rather than disguised mocks."""
+    mock_client = MockToolClient()
+    
+    class FailingChatModel:
+        async def ainvoke(self, *args, **kwargs):
+            raise RuntimeError("Simulated upstream provider outage / rate limit")
+
+    workflow = create_agent_workflow(mock_client, llm=FailingChatModel())
+    original_env = settings.ENVIRONMENT
+    settings.ENVIRONMENT = "production"
+    try:
+        state = AgentState(
+            user_id="user_test_5",
+            thread_id="thread_test_5",
+            message="Check in with me please",
+        )
+        result = await workflow.ainvoke(state)
+        events = result["events"]
+        error_events = [e for e in events if e.get("type") == "agent.error"]
+        assert len(error_events) == 1
+        assert error_events[0]["data"]["code"] == "PROVIDER_ERROR"
+        # Must not expose raw internal tracebacks
+        assert "Simulated upstream provider outage" not in error_events[0]["data"]["message"]
+    finally:
+        settings.ENVIRONMENT = original_env

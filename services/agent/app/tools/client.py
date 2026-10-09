@@ -2,6 +2,7 @@ import hmac
 import hashlib
 import json
 import time
+import uuid
 from typing import Any, Dict, Optional
 import httpx
 from app.core.config import settings
@@ -34,10 +35,12 @@ class ToolClient:
     async def execute_tool(
         self, tool: str, user_id: str, payload: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
+        tool_payload = dict(payload or {})
+        tool_payload.setdefault("_nonce", uuid.uuid4().hex[:16])
         body_dict = {
             "tool": tool,
             "userId": user_id,
-            "payload": payload or {},
+            "payload": tool_payload,
         }
         body_str, headers = self._sign_request(body_dict)
 
