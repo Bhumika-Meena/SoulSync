@@ -9,6 +9,7 @@ class AgentState(BaseModel):
     context_data: Dict[str, Any] = Field(default_factory=dict)
     pending_action: Optional[Dict[str, Any]] = None
     approved: bool = False
+    rejected: bool = False
     action_result: Optional[Dict[str, Any]] = None
     final_response: str = ""
     events: List[Dict[str, Any]] = Field(default_factory=list)

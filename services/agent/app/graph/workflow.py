@@ -1,10 +1,78 @@
+"""SoulSync Agent Workflow Graph.
+
+Implements LangGraph StateGraph orchestration with:
+- Intent triage and context retrieval
+- Companion reasoning with OpenAI (gpt-4o-mini) and safe offline heuristic fallback
+- Untrusted data separation and non-medical safety boundaries
+- Strict Human-in-the-Loop (HITL) approval with clean rejection handling
+- Process-local checkpointer support via MemorySaver
+"""
+
+import logging
 from typing import Any, Dict, Optional
 from langgraph.graph import StateGraph, END
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_openai import ChatOpenAI
+
 from app.graph.state import AgentState
 from app.tools.client import ToolClient
+from app.core.config import settings
+from app.prompts.companion import (
+    COMPANION_PROMPT_VERSION,
+    build_companion_system_prompt,
+    format_untrusted_context,
+    sanitize_untrusted_text,
+)
 
-def create_agent_workflow(tool_client: Optional[ToolClient] = None):
+logger = logging.getLogger(__name__)
+
+def _generate_heuristic_companion_response(context: Dict[str, Any]) -> str:
+    """Deterministic companion response used in mock mode and offline tests."""
+    parts = []
+    dominant_emotion = context.get("emotion_trends", {}).get("dominantEmotion")
+    memories = context.get("memory", [])
+
+    if dominant_emotion:
+        parts.append(f"Noticing your recent emotional rhythm often centers around feeling {dominant_emotion}.")
+
+    if memories and len(memories) > 0:
+        top_mem = memories[0].get("content", "")
+        if top_mem:
+            parts.append(f"Drawing from your earlier reflection ('{top_mem[:80]}...'), it shows your thoughtful awareness.")
+
+    parts.append(
+        "I'm here with you. Take a gentle breath and acknowledge the space you're creating for yourself today."
+    )
+    return " ".join(parts)
+
+def create_agent_workflow(
+    tool_client: Optional[ToolClient] = None,
+    checkpointer: Optional[Any] = None,
+    llm: Optional[Any] = None,
+):
+    """Creates and compiles the SoulSync LangGraph workflow.
+
+    Note on Checkpointing:
+    When a checkpointer (e.g. MemorySaver) is supplied, LangGraph persists
+    graph execution snapshots in memory keyed by thread_id. This checkpointer
+    is process-local and suitable for dev/test and single-process instances.
+    Durable cross-process timeline storage is preserved at the NestJS/PostgreSQL layer.
+    """
     client = tool_client or ToolClient()
+
+    # Model resolution:
+    active_llm = llm
+    if active_llm is None and not settings.MOCK_LLM and settings.OPENAI_API_KEY:
+        try:
+            active_llm = ChatOpenAI(
+                model="gpt-4o-mini",
+                temperature=0.7,
+                api_key=settings.OPENAI_API_KEY,
+                timeout=15.0,
+            )
+        except Exception as e:
+            logger.warning("Failed to initialize ChatOpenAI: %s. Using heuristic fallback.", e)
+            active_llm = None
 
     async def triage_intent(state: AgentState) -> Dict[str, Any]:
         msg = state.message.lower()
@@ -67,18 +135,23 @@ def create_agent_workflow(tool_client: Optional[ToolClient] = None):
         events = list(state.events)
         pending_action = state.pending_action
 
+        # Do not propose actions if action was already rejected or approved
+        if state.rejected or state.approved:
+            return {"events": events}
+
         # Check if user intends to set or propose a wellness goal
-        if state.intent == "goal_planning" and not pending_action and not state.approved:
+        if state.intent == "goal_planning" and not pending_action:
             # Extract a sensible goal title from user message
             title = "Daily Mindful Reflection"
             desc = "Dedicate 10 minutes to mindfulness and emotional journaling."
-            if "walk" in msg.lower():
+            lowered = msg.lower()
+            if "walk" in lowered:
                 title = "Daily Evening Walk"
                 desc = "Take a 20-minute gentle walk outdoors to reset."
-            elif "sleep" in msg.lower() or "bed" in msg.lower():
+            elif "sleep" in lowered or "bed" in lowered:
                 title = "Consistent Sleep Routine"
                 desc = "Begin screen-free wind down 30 minutes before sleep."
-            elif "breath" in msg.lower() or "meditat" in msg.lower():
+            elif "breath" in lowered or "meditat" in lowered:
                 title = "Morning Breathwork Practice"
                 desc = "Practice 5 minutes of calming box breathing each morning."
 
@@ -95,7 +168,17 @@ def create_agent_workflow(tool_client: Optional[ToolClient] = None):
         events = list(state.events)
         action_result = state.action_result
 
-        # If a mutating action is proposed and NOT yet approved by the human:
+        # Case 1: Rejection - User declined or cancelled the proposed action
+        if state.rejected:
+            # Cancel the action explicitly. Do NOT emit approval.required and do NOT execute mutation.
+            action_result = {"status": "CANCELLED", "actionId": (state.pending_action or {}).get("actionId")}
+            return {
+                "action_result": action_result,
+                "pending_action": None,
+                "events": events,
+            }
+
+        # Case 2: Mutation proposed and NOT yet approved
         if state.pending_action and not state.approved:
             events.append({
                 "type": "approval.required",
@@ -108,7 +191,7 @@ def create_agent_workflow(tool_client: Optional[ToolClient] = None):
             })
             return {"events": events}
 
-        # If user approved the proposed action:
+        # Case 3: User approved the proposed action
         if state.pending_action and state.approved:
             try:
                 events.append({
@@ -145,38 +228,63 @@ def create_agent_workflow(tool_client: Optional[ToolClient] = None):
         action = state.action_result
         pending = state.pending_action
 
-        # Synthesize supportive companion response
-        parts = []
-
-        if pending and not state.approved:
-            parts.append(
-                f"I hear how important this is to you. To support your wellness journey, I've prepared a goal: **{pending['title']}** ({pending.get('description')}). Please confirm below if you'd like me to activate it for you."
+        # 1. Action Rejection response
+        if state.rejected:
+            final_text = (
+                "I completely understand. I've cancelled setting this goal for you. "
+                "We can explore other ways to support your wellbeing whenever you're ready."
             )
+        # 2. Action Executed response
         elif action and action.get("status") == "ACTIVE":
-            parts.append(
-                f"Wonderful! I've activated your new wellness goal: **{action.get('goal', {}).get('title', 'Wellness Goal')}**. Taking small, intentional steps is a powerful way to honor your wellbeing."
+            goal_title = action.get("goal", {}).get("title", (pending or {}).get("title", "Wellness Goal"))
+            final_text = (
+                f"Wonderful! I've activated your new wellness goal: **{goal_title}**. "
+                "Taking small, intentional steps is a powerful way to honor your wellbeing."
             )
+        # 3. Action Proposed (waiting for approval)
+        elif pending and not state.approved:
+            final_text = (
+                f"I hear how important this is to you. To support your wellness journey, I've prepared a goal: "
+                f"**{pending['title']}** ({pending.get('description', '')}). "
+                "Please confirm below if you'd like me to activate it for you."
+            )
+        # 4. Standard Companion Reflection
         else:
-            # Companion reflection incorporating retrieved memories / emotions
-            dominant_emotion = context.get("emotion_trends", {}).get("dominantEmotion")
-            memories = context.get("memory", [])
-
-            if dominant_emotion:
-                parts.append(f"Noticing your recent emotional rhythm often centers around feeling {dominant_emotion}.")
-
-            if memories and len(memories) > 0:
-                top_mem = memories[0].get("content", "")
-                if top_mem:
-                    parts.append(f"Drawing from your earlier reflection ('{top_mem[:80]}...'), it shows your thoughtful awareness.")
-
-            parts.append(
-                "I'm here with you. Take a gentle breath and acknowledge the space you're creating for yourself today."
-            )
-
-        final_text = " ".join(parts)
+            if active_llm is not None:
+                try:
+                    system_prompt = build_companion_system_prompt()
+                    untrusted_ctx = format_untrusted_context(
+                        memories=context.get("memory", []),
+                        emotion_trends=context.get("emotion_trends", {}),
+                        journal_entries=context.get("journal_entries", []),
+                    )
+                    user_prompt = f"{untrusted_ctx}\n\n<user_message>\n{sanitize_untrusted_text(state.message)}\n</user_message>"
+                    response = await active_llm.ainvoke([
+                        SystemMessage(content=system_prompt),
+                        HumanMessage(content=user_prompt),
+                    ])
+                    final_text = response.content if hasattr(response, "content") else str(response)
+                except Exception as exc:
+                    if settings.is_production:
+                        logger.error("OpenAI model invocation failed in production: %s", type(exc).__name__)
+                        events.append({
+                            "type": "agent.error",
+                            "data": {
+                                "code": "PROVIDER_ERROR",
+                                "message": "I'm temporarily having trouble connecting to my reflection service. Please try again in a moment.",
+                            },
+                        })
+                        return {
+                            "final_response": "I'm temporarily having trouble connecting to my reflection service. Please try again in a moment.",
+                            "events": events,
+                        }
+                    else:
+                        logger.warning("LLM call failed (%s); using deterministic heuristic response", exc)
+                        final_text = _generate_heuristic_companion_response(context)
+            else:
+                final_text = _generate_heuristic_companion_response(context)
 
         # Emit content deltas and completion event
-        # Split into readable chunks for streaming
         words = final_text.split(" ")
         for i in range(0, len(words), 4):
             chunk = " ".join(words[i : i + 4]) + " "
@@ -204,4 +312,6 @@ def create_agent_workflow(tool_client: Optional[ToolClient] = None):
     builder.add_edge("safety_validate", "generate_response")
     builder.add_edge("generate_response", END)
 
+    if checkpointer is not None:
+        return builder.compile(checkpointer=checkpointer)
     return builder.compile()
