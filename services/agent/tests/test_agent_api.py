@@ -7,9 +7,9 @@ from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.core.config import settings
 
-def _get_auth_headers(body_dict: dict) -> tuple[str, dict]:
+def _get_auth_headers(body_dict: dict, timestamp_offset: int = 0) -> tuple[str, dict]:
     body_str = json.dumps(body_dict, separators=(",", ":"))
-    ts = str(int(time.time()))
+    ts = str(int(time.time()) + timestamp_offset)
     sig = hmac.new(
         settings.INTERNAL_AGENT_SECRET.encode(),
         f"{ts}{body_str}".encode(),
@@ -131,8 +131,9 @@ async def test_agent_resume_duplicate_rejected():
         first_res = await ac.post("/internal/v1/agent/resume", content=r_body, headers=r_headers)
         assert first_res.status_code == 200
 
-        # Duplicate attempt
-        second_res = await ac.post("/internal/v1/agent/resume", content=r_body, headers=r_headers)
+        # Duplicate attempt with fresh transmission signature for already-processed action
+        r_body2, r_headers2 = _get_auth_headers(resume_payload, timestamp_offset=1)
+        second_res = await ac.post("/internal/v1/agent/resume", content=r_body2, headers=r_headers2)
         assert second_res.status_code == 409
         assert "already been processed" in second_res.text
 

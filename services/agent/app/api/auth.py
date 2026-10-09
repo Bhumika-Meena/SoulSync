@@ -1,6 +1,7 @@
 import hmac
 import hashlib
 import time
+from typing import Dict
 from fastapi import Request, HTTPException, Security
 from fastapi.security.api_key import APIKeyHeader
 from app.core.config import settings
@@ -8,8 +9,27 @@ from app.core.config import settings
 sig_header = APIKeyHeader(name="x-internal-signature", auto_error=False)
 ts_header = APIKeyHeader(name="x-internal-timestamp", auto_error=False)
 
+# Process-local cache of consumed HMAC signatures for replay protection
+_consumed_signatures: Dict[str, int] = {}
+
+def _is_replayed(signature: str, now: int) -> bool:
+    expiry = _consumed_signatures.get(signature)
+    if not expiry:
+        return False
+    if expiry <= now:
+        del _consumed_signatures[signature]
+        return False
+    return True
+
+def _consume_signature(signature: str, expiry: int, now: int) -> None:
+    if len(_consumed_signatures) > 500:
+        stale = [sig for sig, exp in _consumed_signatures.items() if exp <= now]
+        for sig in stale:
+            del _consumed_signatures[sig]
+    _consumed_signatures[signature] = expiry
+
 async def verify_internal_hmac(request: Request):
-    """Verify incoming internal request HMAC-SHA256 signature and timestamp."""
+    """Verify incoming internal request HMAC-SHA256 signature, timestamp, and replay protection."""
     signature = request.headers.get("x-internal-signature")
     timestamp_str = request.headers.get("x-internal-timestamp")
 
@@ -50,5 +70,14 @@ async def verify_internal_hmac(request: Request):
             status_code=401,
             detail="Invalid internal HMAC signature",
         )
+
+    # Check for replayed requests
+    if _is_replayed(signature, now):
+        raise HTTPException(
+            status_code=401,
+            detail="Internal request already processed (replay detected)",
+        )
+
+    _consume_signature(signature, timestamp + 300, now)
 
     return True
