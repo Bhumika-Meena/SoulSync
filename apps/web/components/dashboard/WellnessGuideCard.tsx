@@ -1,76 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type WellnessGuideCardProps = {
-  initialName: string;
-  initialVoiceId: string | null;
+  initialName?: string;
+  initialVoiceId?: string | null;
 };
 
-type Profile = {
-  name: string;
-  voiceId: string;
-};
-
-export function WellnessGuideCard({ initialName, initialVoiceId }: WellnessGuideCardProps) {
-  const [profile, setProfile] = useState<Profile>({
-    name: initialName || "Wellness Guide",
-    voiceId: initialVoiceId ?? "default",
-  });
+export function WellnessGuideCard({ initialName, initialVoiceId }: WellnessGuideCardProps = {}) {
+  const router = useRouter();
+  const [name] = useState(initialName || "Wellness Companion");
+  const [voiceId] = useState(initialVoiceId ?? "default");
   const [mode, setMode] = useState<"chat" | "listen">("chat");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [input, setInput] = useState("");
-  const [reply, setReply] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  async function send() {
-    if (!input.trim() || loading) return;
-    const message = input.trim();
-    setInput("");
-    setLoading(true);
-    try {
-      const res = await fetch("/api/wellness-guide", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-      let data: { reply?: string; profile?: Profile; message?: string } = {};
-      try {
-        data = await res.json();
-      } catch {
-        // non-JSON response (e.g. 500 HTML)
-        data = { message: "Request failed." };
-      }
-      if (!res.ok) {
-        setReply(
-          "I ran into a technical issue reaching my AI brain, but I'm still here with you. You can try again in a moment."
-        );
-        setLoading(false);
-        return;
-      }
-      const text: string = data.reply ?? "";
-      const p: Profile | undefined = data.profile;
-      if (p) setProfile({ name: p.name, voiceId: p.voiceId });
-      if (text) {
-        setReply(text);
-        speakIfPossible(text, p?.voiceId ?? profile.voiceId);
-      }
-    } catch (e) {
-      console.error("wellness guide error", e);
-      setReply(
-        "I ran into a technical issue reaching my AI brain, but I'm still here with you. You can try again in a moment."
-      );
-    } finally {
-      setLoading(false);
-    }
+  const displayText =
+    "I'm here to support your daily reflection journey. Let's explore your recent emotional patterns, review journal entries, or set healthy wellness goals together.";
+
+  function handleSubmit() {
+    router.push("/dashboard/guide");
   }
-
-  // Ensure voices are loaded on first mount for better selection later
-  useEffect(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.getVoices();
-  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -78,10 +30,6 @@ export function WellnessGuideCard({ initialName, initialVoiceId }: WellnessGuide
     const timer = setInterval(() => setIsSpeaking(synth.speaking), 200);
     return () => clearInterval(timer);
   }, []);
-
-  const displayText =
-    reply ??
-    `“I noticed your mood is particularly radiant & joyful today. Would you like to explore some creative exercises to channel this energy?”`;
 
   return (
     <div className="rounded-2xl bg-slate-900 text-white shadow-sm overflow-hidden">
@@ -93,13 +41,13 @@ export function WellnessGuideCard({ initialName, initialVoiceId }: WellnessGuide
             </span>
           </div>
           <div>
-            <p className="font-semibold">{profile.name}</p>
-            <p className="text-xs text-white/60">Online</p>
+            <p className="font-semibold">{name}</p>
+            <p className="text-xs text-white/60">Online • AI Companion</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Link
               href="/dashboard/guide"
-              className="text-xs font-semibold px-3 py-1 rounded-full border border-white/10 text-white/70 hover:text-white hover:border-white/20"
+              className="text-xs font-semibold px-3 py-1 rounded-full border border-white/10 text-white/70 hover:text-white hover:border-white/20 transition-colors"
             >
               Open chat
             </Link>
@@ -135,16 +83,15 @@ export function WellnessGuideCard({ initialName, initialVoiceId }: WellnessGuide
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && void send()}
-              className="flex-1 bg-white/10 border border-white/10 rounded-full px-4 py-2 text-sm placeholder:text-white/40 outline-none"
-              placeholder={`Reply to ${profile.name}...`}
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+              className="flex-1 bg-white/10 border border-white/10 rounded-full px-4 py-2 text-sm placeholder:text-white/40 outline-none focus:ring-1 focus:ring-amber-300"
+              placeholder={`Talk with ${name}...`}
             />
             <button
               type="button"
-              onClick={() => void send()}
-              disabled={loading}
-              className="w-10 h-10 rounded-full bg-amber-400 text-slate-900 font-semibold disabled:opacity-70"
-              aria-label="Send"
+              onClick={handleSubmit}
+              className="w-10 h-10 rounded-full bg-amber-400 text-slate-900 font-semibold hover:bg-amber-500 transition-colors flex items-center justify-center shrink-0"
+              aria-label="Start chat"
             >
               ➤
             </button>
@@ -161,14 +108,14 @@ export function WellnessGuideCard({ initialName, initialVoiceId }: WellnessGuide
                   setIsSpeaking(false);
                   return;
                 }
-                speakIfPossible(displayText.replace(/[“”]/g, ""), profile.voiceId);
+                speakIfPossible(displayText, voiceId);
               }}
               className="inline-flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-slate-900 font-semibold px-5 py-2.5 transition-colors"
             >
               {isSpeaking ? "Stop" : "Play voice"}
             </button>
             <span className="text-xs text-white/60">
-              Voice: {profile.voiceId === "default" ? "browser default" : profile.voiceId}
+              Voice: {voiceId === "default" ? "browser default" : voiceId}
             </span>
           </div>
         )}
@@ -189,4 +136,3 @@ function speakIfPossible(text: string, voiceId?: string) {
   utterance.pitch = 1.02;
   window.speechSynthesis.speak(utterance);
 }
-
