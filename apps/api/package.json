@@ -8,6 +8,7 @@
     "start": "node dist/main.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
     "check-types": "tsc --noEmit",
+    "test": "npx tsx --test \"test/**/*.spec.ts\"",
     "db:generate": "prisma generate --schema=../../packages/database/prisma/schema.prisma"
   },
   "dependencies": {
