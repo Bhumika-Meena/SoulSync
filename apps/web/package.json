@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "test": "npx tsx --test \"test/**/*.spec.ts\"",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "prisma generate --schema=../../packages/database/prisma/schema.prisma",
