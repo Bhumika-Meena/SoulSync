@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "check-types": "tsc --noEmit",
     "test": "npx tsx --test \"test/**/*.spec.ts\"",
     "start": "next start",
     "lint": "next lint",
