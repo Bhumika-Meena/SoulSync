@@ -4,18 +4,59 @@ services:
     container_name: soulsync-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: soulsync
-      POSTGRES_PASSWORD: soulsync_dev
-      POSTGRES_DB: soulsync
+      POSTGRES_USER: ${POSTGRES_USER:-soulsync}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-soulsync_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-soulsync}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U soulsync -d soulsync"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-soulsync} -d ${POSTGRES_DB:-soulsync}"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # Optional full-stack profiles: run only with `docker compose --profile full up`
+  api:
+    profiles: ["full"]
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    container_name: soulsync-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-soulsync}:${POSTGRES_PASSWORD:-soulsync_dev}@postgres:5432/${POSTGRES_DB:-soulsync}?schema=public
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:-soulsync-development-jwt-secret-do-not-use-in-production}
+      INTERNAL_AGENT_SECRET: ${INTERNAL_AGENT_SECRET:-soulsync-internal-agent-secret-do-not-use-in-production}
+      AGENT_SERVICE_URL: http://agent:8000
+    ports:
+      - "${API_PORT:-4000}:4000"
+
+  agent:
+    profiles: ["full"]
+    build:
+      context: ../services/agent
+      dockerfile: Dockerfile
+    container_name: soulsync-agent
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      ENVIRONMENT: development
+      PORT: 8000
+      INTERNAL_AGENT_SECRET: ${INTERNAL_AGENT_SECRET:-soulsync-internal-agent-secret-do-not-use-in-production}
+      INTERNAL_GATEWAY_URL: http://api:4000/internal/v1/tools/execute
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports:
+      - "${AGENT_PORT:-8000}:8000"
 
 volumes:
   postgres_data:
