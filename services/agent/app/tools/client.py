@@ -1,11 +1,16 @@
 import hmac
 import hashlib
 import json
+import logging
 import time
 import uuid
 from typing import Any, Dict, Optional
 import httpx
 from app.core.config import settings
+from app.core.logging import get_correlation_id
+
+logger = logging.getLogger(__name__)
+
 
 class ToolClient:
     """Internal HTTP client for executing authorized tools via NestJS Tool Gateway."""
@@ -30,6 +35,13 @@ class ToolClient:
             "x-internal-signature": signature,
             "x-internal-timestamp": timestamp,
         }
+
+        # Propagate active correlation identifier to Tool Gateway
+        corr_id = get_correlation_id()
+        if corr_id and corr_id != "unknown":
+            headers["x-correlation-id"] = corr_id
+            headers["x-request-id"] = corr_id
+
         return body_str, headers
 
     async def execute_tool(
@@ -43,15 +55,52 @@ class ToolClient:
             "payload": tool_payload,
         }
         body_str, headers = self._sign_request(body_dict)
+        corr_id = get_correlation_id()
+        start_time = time.time()
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                self.base_url,
-                content=body_str,
-                headers=headers,
+        logger.info(
+            "Executing internal tool",
+            extra={
+                "operation": "tool.execute",
+                "tool": tool,
+                "correlationId": corr_id,
+            },
+        )
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    self.base_url,
+                    content=body_str,
+                    headers=headers,
+                )
+                response.raise_for_status()
+                duration_ms = int((time.time() - start_time) * 1000)
+                logger.info(
+                    "Internal tool completed successfully",
+                    extra={
+                        "operation": "tool.execute",
+                        "tool": tool,
+                        "durationMs": duration_ms,
+                        "status": "success",
+                        "correlationId": corr_id,
+                    },
+                )
+                return response.json()
+        except Exception as exc:
+            duration_ms = int((time.time() - start_time) * 1000)
+            logger.error(
+                "Internal tool execution failed: %s",
+                type(exc).__name__,
+                extra={
+                    "operation": "tool.execute",
+                    "tool": tool,
+                    "durationMs": duration_ms,
+                    "status": "error",
+                    "correlationId": corr_id,
+                },
             )
-            response.raise_for_status()
-            return response.json()
+            raise
 
     async def get_recent_journal_entries(
         self, user_id: str, limit: int = 5
