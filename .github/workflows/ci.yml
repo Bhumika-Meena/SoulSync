@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node-monorepo:
+    name: Node.js Monorepo (Typecheck & Test)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.5.2
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @soulsync/database db:generate
+
+      - name: Build shared contracts
+        run: pnpm --filter @soulsync/contracts build
+
+      - name: Run TypeScript typecheck
+        run: pnpm -r check-types
+
+      - name: Run test suites
+        run: pnpm -r test
+
+  python-agent:
+    name: Python Agent (Unit & Safety Tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        working-directory: services/agent
+        run: uv sync --frozen
+
+      - name: Run agent test suite
+        working-directory: services/agent
+        run: uv run pytest tests -v
+
+  docker-build:
+    name: Docker Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build API Docker image
+        run: docker build -f apps/api/Dockerfile -t soulsync-api:ci .
+
+      - name: Build Agent Docker image
+        run: docker build -f services/agent/Dockerfile -t soulsync-agent:ci services/agent
