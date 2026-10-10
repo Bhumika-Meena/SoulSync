@@ -12,6 +12,7 @@ export const ApiErrorResponseSchema = z.object({
     statusCode: z.number().int(),
     timestamp: z.string(),
     path: z.string().optional(),
+    requestId: z.string().optional(),
   }),
 });
 

@@ -5,8 +5,9 @@ import {
   Body,
   Param,
   Res,
+  Req,
 } from "@nestjs/common";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import { AgentService } from "./agent.service";
 import {
   CurrentUser,
@@ -31,13 +32,19 @@ export class AgentController {
   async chat(
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(AgentChatRequestSchema)) dto: AgentChatRequestDTO,
-    @Res() res: Response
+    @Res() res: Response,
+    @Req() req: Request
   ) {
+    const correlationId =
+      req.correlationId ||
+      (req.headers["x-correlation-id"] as string | undefined) ||
+      (req.headers["x-request-id"] as string | undefined);
     return this.agentService.chatStream(
       user.id,
       dto.message,
       res,
-      dto.threadId
+      dto.threadId,
+      correlationId
     );
   }
 
@@ -48,8 +55,13 @@ export class AgentController {
   async approve(
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(AgentApprovalRequestSchema)) dto: AgentApprovalRequestDTO,
-    @Res() res: Response
+    @Res() res: Response,
+    @Req() req: Request
   ) {
+    const correlationId =
+      req.correlationId ||
+      (req.headers["x-correlation-id"] as string | undefined) ||
+      (req.headers["x-request-id"] as string | undefined);
     const threadId = dto.threadId || dto.actionId.replace("act_", "");
     return this.agentService.approveStream(
       user.id,
@@ -57,7 +69,8 @@ export class AgentController {
       dto.approved,
       res,
       threadId,
-      dto.modifiedPayload
+      dto.modifiedPayload,
+      correlationId
     );
   }
 

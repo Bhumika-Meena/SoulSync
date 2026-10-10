@@ -18,6 +18,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
+    const correlationId =
+      request?.correlationId ||
+      (request?.headers?.["x-correlation-id"] as string) ||
+      (request?.headers?.["x-request-id"] as string) ||
+      "unknown";
+
     const isHttpException = exception instanceof HttpException;
     const statusCode = isHttpException
       ? exception.getStatus()
@@ -39,9 +45,22 @@ export class HttpExceptionFilter implements ExceptionFilter {
         details = resObj["details"] || resObj["errors"] || undefined;
       }
     } else {
+      const sanitizedPath = (request?.originalUrl || request?.url || "UNKNOWN").split("?")[0];
+      const errMessage = exception instanceof Error ? exception.message : String(exception);
+      // Privacy-safe structured error log: excludes query secrets, request bodies, credentials, and full stacks
       this.logger.error(
-        `Unhandled exception on ${request?.method ?? "UNKNOWN"} ${request?.url ?? "UNKNOWN"}`,
-        exception instanceof Error ? exception.stack : String(exception)
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          service: "soulsync-api",
+          level: "error",
+          correlationId,
+          method: request?.method ?? "UNKNOWN",
+          path: sanitizedPath,
+          statusCode,
+          errorCode: "INTERNAL_SERVER_ERROR",
+          errorName: exception instanceof Error ? exception.name : "UnhandledError",
+          message: errMessage.slice(0, 250),
+        })
       );
     }
 
@@ -53,7 +72,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
         details,
         statusCode,
         timestamp: new Date().toISOString(),
-        path: request?.url,
+        path: request?.url ? request.url.split("?")[0] : undefined,
+        requestId: correlationId,
       },
     };
 
