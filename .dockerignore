@@ -1,0 +1,41 @@
+# Version control & IDE
+.git
+.gitignore
+.github
+.vscode
+.idea
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+
+# Secrets & environment files
+.env
+.env.*
+!.env.example
+
+# Monorepo build outputs & caches
+.turbo
+dist
+**/dist
+.next
+**/.next
+coverage
+**/coverage
+
+# Host node_modules (installed inside container for Linux architecture)
+node_modules
+**/node_modules
+
+# Python agent service & virtual environments
+services/agent
+**/.venv
+**/__pycache__
+**/.pytest_cache
+
+# Web frontend & UI packages (not needed for API container)
+apps/web
+packages/ui
+
+# Documentation & markdown
+docs
+*.md
