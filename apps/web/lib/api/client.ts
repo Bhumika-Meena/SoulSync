@@ -80,6 +80,7 @@ interface ApiResponseEnvelope<T> {
     details?: unknown;
     path?: string;
     timestamp?: string;
+    requestId?: string;
   };
 }
 
@@ -107,8 +108,17 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
 
   const fullUrl = `${baseUrl}${urlPath}`;
 
+  const correlationId =
+    context?.headers?.["x-correlation-id"] ||
+    context?.headers?.["x-request-id"] ||
+    (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `req_${Math.random().toString(36).slice(2, 11)}`);
+
   const requestHeaders: Record<string, string> = {
     Accept: "application/json",
+    "x-correlation-id": correlationId,
+    "x-request-id": correlationId,
     ...headers,
     ...(context?.headers ?? {}),
   };
@@ -140,7 +150,7 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
   } catch (networkError: unknown) {
     const message =
       networkError instanceof Error ? networkError.message : "Failed to connect to API";
-    throw new ApiClientError(0, message, "NETWORK_ERROR");
+    throw new ApiClientError(0, message, "NETWORK_ERROR", undefined, undefined, undefined, correlationId);
   }
 
   let responseJson: ApiResponseEnvelope<T> | null = null;
@@ -160,6 +170,11 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
       responseJson?.message ||
       (typeof responseJson === "string" ? responseJson : `Request failed with status ${response.status}`);
     const code = errorEnvelope?.code || (response.status === 401 ? "UNAUTHORIZED" : "API_ERROR");
+    const requestId =
+      errorEnvelope?.requestId ||
+      response.headers.get("x-correlation-id") ||
+      response.headers.get("x-request-id") ||
+      correlationId;
 
     throw new ApiClientError(
       response.status,
@@ -167,7 +182,8 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
       code,
       errorEnvelope?.details,
       errorEnvelope?.path,
-      errorEnvelope?.timestamp
+      errorEnvelope?.timestamp,
+      requestId
     );
   }
 
@@ -410,9 +426,18 @@ export const api = {
       const baseUrl = getApiBaseUrl();
       const url = `${baseUrl}/agent/chat`;
 
+      const correlationId =
+        context?.headers?.["x-correlation-id"] ||
+        context?.headers?.["x-request-id"] ||
+        (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `req_${Math.random().toString(36).slice(2, 11)}`);
+
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
+        "x-correlation-id": correlationId,
+        "x-request-id": correlationId,
         ...(context?.headers ?? {}),
       };
 
@@ -434,7 +459,7 @@ export const api = {
       } catch (networkError: unknown) {
         const message =
           networkError instanceof Error ? networkError.message : "Failed to connect to agent API";
-        const clientError = new ApiClientError(0, message, "NETWORK_ERROR");
+        const clientError = new ApiClientError(0, message, "NETWORK_ERROR", undefined, undefined, undefined, correlationId);
         callbacks.onError?.(clientError);
         throw clientError;
       }
@@ -448,13 +473,18 @@ export const api = {
         }
         const message = errorData?.error?.message || errorData?.message || `HTTP ${res.status}`;
         const code = errorData?.error?.code || (res.status === 401 ? "UNAUTHORIZED" : "API_ERROR");
-        const clientError = new ApiClientError(res.status, message, code, errorData?.error?.details);
+        const requestId =
+          errorData?.error?.requestId ||
+          res.headers.get("x-correlation-id") ||
+          res.headers.get("x-request-id") ||
+          correlationId;
+        const clientError = new ApiClientError(res.status, message, code, errorData?.error?.details, undefined, undefined, requestId);
         callbacks.onError?.(clientError);
         throw clientError;
       }
 
       if (!res.body) {
-        const noBodyError = new ApiClientError(0, "No response body received from stream", "STREAM_ERROR");
+        const noBodyError = new ApiClientError(0, "No response body received from stream", "STREAM_ERROR", undefined, undefined, undefined, correlationId);
         callbacks.onError?.(noBodyError);
         throw noBodyError;
       }
@@ -470,9 +500,18 @@ export const api = {
       const baseUrl = getApiBaseUrl();
       const url = `${baseUrl}/agent/approve`;
 
+      const correlationId =
+        context?.headers?.["x-correlation-id"] ||
+        context?.headers?.["x-request-id"] ||
+        (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `req_${Math.random().toString(36).slice(2, 11)}`);
+
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
+        "x-correlation-id": correlationId,
+        "x-request-id": correlationId,
         ...(context?.headers ?? {}),
       };
 
@@ -494,7 +533,7 @@ export const api = {
       } catch (networkError: unknown) {
         const message =
           networkError instanceof Error ? networkError.message : "Failed to connect to agent API";
-        const clientError = new ApiClientError(0, message, "NETWORK_ERROR");
+        const clientError = new ApiClientError(0, message, "NETWORK_ERROR", undefined, undefined, undefined, correlationId);
         callbacks.onError?.(clientError);
         throw clientError;
       }
@@ -508,13 +547,18 @@ export const api = {
         }
         const message = errorData?.error?.message || errorData?.message || `HTTP ${res.status}`;
         const code = errorData?.error?.code || (res.status === 401 ? "UNAUTHORIZED" : "API_ERROR");
-        const clientError = new ApiClientError(res.status, message, code, errorData?.error?.details);
+        const requestId =
+          errorData?.error?.requestId ||
+          res.headers.get("x-correlation-id") ||
+          res.headers.get("x-request-id") ||
+          correlationId;
+        const clientError = new ApiClientError(res.status, message, code, errorData?.error?.details, undefined, undefined, requestId);
         callbacks.onError?.(clientError);
         throw clientError;
       }
 
       if (!res.body) {
-        const noBodyError = new ApiClientError(0, "No response body received from stream", "STREAM_ERROR");
+        const noBodyError = new ApiClientError(0, "No response body received from stream", "STREAM_ERROR", undefined, undefined, undefined, correlationId);
         callbacks.onError?.(noBodyError);
         throw noBodyError;
       }

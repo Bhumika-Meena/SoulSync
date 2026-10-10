@@ -1,5 +1,7 @@
+import asyncio
 import json
 import logging
+import time
 from typing import Any, AsyncGenerator, Dict, Optional, Set
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -7,6 +9,7 @@ from pydantic import BaseModel
 from langgraph.checkpoint.memory import MemorySaver
 
 from app.api.auth import verify_internal_hmac
+from app.core.logging import get_correlation_id
 from app.graph.state import AgentState
 from app.graph.workflow import create_agent_workflow
 
@@ -45,9 +48,22 @@ async def stream_workflow_events(
     Uses LangGraph's astream_events(..., version='v2') to intercept real-time
     chat model token deltas (on_chat_model_stream) and node lifecycle events,
     filtering out internal reasoning, prompts, and raw tool arguments.
+    Guarantees no duplicate terminal events and graceful cancellation cleanup.
     """
     last_event_index = 0
     token_streamed = False
+    terminal_emitted = False
+    start_time = time.time()
+    corr_id = get_correlation_id()
+
+    logger.info(
+        "Agent event stream started",
+        extra={
+            "operation": "stream_workflow_events",
+            "threadId": state.thread_id,
+            "correlationId": corr_id,
+        },
+    )
 
     try:
         async for ev in workflow.astream_events(state, version="v2", config=config):
@@ -92,16 +108,59 @@ async def stream_workflow_events(
                                 if act_id:
                                     _action_ownership[act_id] = state.user_id
 
+                            if etype in ("agent.completed", "agent.error"):
+                                terminal_emitted = True
+
                             data_json = json.dumps(e.get("data", {}))
                             yield f"event: {etype}\ndata: {data_json}\n\n"
 
+        duration_ms = int((time.time() - start_time) * 1000)
+        logger.info(
+            "Agent event stream completed successfully",
+            extra={
+                "operation": "stream_workflow_events",
+                "threadId": state.thread_id,
+                "durationMs": duration_ms,
+                "correlationId": corr_id,
+                "status": "completed",
+            },
+        )
+
+    except asyncio.CancelledError:
+        duration_ms = int((time.time() - start_time) * 1000)
+        logger.info(
+            "Agent event stream cancelled by client",
+            extra={
+                "operation": "stream_workflow_events",
+                "threadId": state.thread_id,
+                "durationMs": duration_ms,
+                "correlationId": corr_id,
+                "status": "cancelled",
+            },
+        )
+        return
+
     except Exception as exc:
-        logger.error("Error during agent event stream: %s", type(exc).__name__)
-        err_payload = json.dumps({
-            "code": "PROVIDER_ERROR",
-            "message": "A streaming interruption occurred with the companion service.",
-        })
-        yield f"event: agent.error\ndata: {err_payload}\n\n"
+        duration_ms = int((time.time() - start_time) * 1000)
+        logger.error(
+            "Error during agent event stream: %s",
+            type(exc).__name__,
+            extra={
+                "operation": "stream_workflow_events",
+                "threadId": state.thread_id,
+                "durationMs": duration_ms,
+                "correlationId": corr_id,
+                "status": "error",
+            },
+        )
+        # Prevent emitting duplicate terminal events if agent.completed was already emitted
+        if not terminal_emitted:
+            terminal_emitted = True
+            err_payload = json.dumps({
+                "code": "PROVIDER_ERROR",
+                "message": "A streaming interruption occurred with the companion service.",
+            })
+            yield f"event: agent.error\ndata: {err_payload}\n\n"
 
 @router.post("/run")
 async def run_agent(req: AgentRunRequest):

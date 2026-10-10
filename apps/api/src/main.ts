@@ -27,6 +27,12 @@ async function bootstrap() {
       "x-user-id",
       "x-internal-signature",
       "x-internal-timestamp",
+      "x-correlation-id",
+      "x-request-id",
+    ],
+    exposedHeaders: [
+      "x-correlation-id",
+      "x-request-id",
     ],
   });
 

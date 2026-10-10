@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, NestModule, MiddlewareConsumer } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
 import { validateEnvironment } from "./common/config/env.schema";
@@ -13,6 +13,7 @@ import { MemoryModule } from "./modules/memory/memory.module";
 import { InternalModule } from "./modules/internal/internal.module";
 import { AgentModule } from "./modules/agent/agent.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
+import { CorrelationMiddleware } from "./common/middleware/correlation.middleware";
 
 @Module({
   imports: [
@@ -40,4 +41,8 @@ import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(CorrelationMiddleware).forRoutes("*");
+  }
+}

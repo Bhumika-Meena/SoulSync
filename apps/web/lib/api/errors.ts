@@ -9,6 +9,7 @@ export interface ApiErrorPayload {
   details?: unknown;
   timestamp?: string;
   path?: string;
+  requestId?: string;
 }
 
 export class ApiClientError extends Error {
@@ -17,6 +18,7 @@ export class ApiClientError extends Error {
   readonly details?: unknown;
   readonly timestamp?: string;
   readonly path?: string;
+  readonly requestId?: string;
 
   constructor(
     statusCode: number,
@@ -24,7 +26,8 @@ export class ApiClientError extends Error {
     code = "API_ERROR",
     details?: unknown,
     path?: string,
-    timestamp?: string
+    timestamp?: string,
+    requestId?: string
   ) {
     super(message);
     this.name = "ApiClientError";
@@ -33,6 +36,7 @@ export class ApiClientError extends Error {
     this.details = details;
     this.path = path;
     this.timestamp = timestamp;
+    this.requestId = requestId;
   }
 }
 

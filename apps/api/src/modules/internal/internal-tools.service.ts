@@ -29,9 +29,19 @@ export class InternalToolsService {
   async executeTool(
     tool: InternalToolName,
     userId: string,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
+    correlationId?: string
   ): Promise<InternalToolExecutionResponseDTO> {
-    this.logger.log(`Executing tool '${tool}' for user '${userId}'`);
+    this.logger.log(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        service: "soulsync-api",
+        operation: "internal_tool.execute",
+        tool,
+        userId,
+        correlationId: correlationId || "unknown",
+      })
+    );
 
     switch (tool) {
       case "get_recent_journal_entries": {
